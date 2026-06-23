@@ -2,13 +2,8 @@
 #include <netinet/in.h> //sock adresess
 #include <unistd.h> // read and write and closes
 #include <iostream>
-#include <stdio.h> // error handling
 #include <cstring> // to zero out adress for structs
-
-static void die(const char* msg){
-    perror(msg);
-    exit(1);
-}
+#include "common.h"
 
 static void do_something(int connfd){
     char rbuf[64] = {}; // buffer: stores clients message
@@ -17,7 +12,7 @@ static void do_something(int connfd){
         perror("read() error");
         return;
     }
-    std::cout << "client says: " << rbuf << endl;
+    std::cout << "client says: " << rbuf << "\n";
     char wbuf[] = "world"; //message sent to the client
     write(connfd, wbuf, strlen(wbuf));
 }
@@ -58,36 +53,4 @@ void serverCon(){
     }
 
 }
-// conecting from the client side
-void clientCon(){
-    // Obtain socket handle
-    int fd = socket(AF_INET,SOCK_STREAM,0);
-    if(fd < 0){
-        die("socket()");
-    }
-    //create network addres
-    struct sockaddr_in addr = {};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(1234); // connect to the servers port
-    addr.sin_addr.s_addr = ntohl(INADDR_LOOPBACK); // test on same computer
-    
-    //connect
-    int rv = connect(fd,(const struct sockaddr*)&addr, sizeof(addr));
-    if(rv){
-        die("connect");
-    }
-    char msg[] = "hello"; // message client sends to server
-    write(fd,msg,strlen(msg));
-    char rbuf[64] = {}; //stores servers response
-    ssize_t n = read(fd,rbuf,sizeof(rbuf)-1);
-    if (n < 0){
-        die("read");
-    }
-    std::cout << "server says: " << rbuf << endl;
-    close(fd);
-}
 
-int main(){
-    clientCon();
-    return 0;
-}
