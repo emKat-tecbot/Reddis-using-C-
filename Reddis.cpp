@@ -25,4 +25,18 @@ int main(){
     rv = listen(fd,SOMAXCONN);
     if(rv){die("listen()");}
 
+    // accept conections
+    while(true){
+        //create struct that stores client info (port and IP)
+        struct sockaddr_in client_addr = {};
+        socklen_t addrlen = sizeof(client_addr);
+        //accept conections
+        int connfd = accept(fd, (struct sockaddr*)&client_addr, &addrlen);
+        if (connfd < 0){ //if error
+            continue; // keep server alive
+        }
+        do_something(connfd); //interact with client
+        close(connfd); // close conection
+    }
+
 }
