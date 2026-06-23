@@ -5,7 +5,20 @@
 #include <stdio.h> // error handling
 #include <cstring> // to zero out adress for structs
 
-int main(){
+static void do_something(int connfd){
+    char rbuf[64] = {}; // buffer: stores clients message
+    ssize_t n = read(connfd,rbuf,sizeof(rbuf)-1) //read message from conection and put it in rbuf
+    if(n < 0){ 
+        msg("read() error");
+        return;
+    }
+    cout << "client says: " << rbuf << endl;
+    char wbuf[] = "world"; //message sent to the client
+    write(connfd, wbuf, strlen(wbuf));
+}
+
+//conecting from the server side
+void serverCon(){
     // Obtain socket handle
     int fd = socket(AF_INET,SOCK_STREAM,0);
     int val = 1; // keep SO_REUSEADDR activated so os dosent prevent you from using the port again after crash or restart
@@ -32,10 +45,10 @@ int main(){
         socklen_t addrlen = sizeof(client_addr);
         //accept conections
         int connfd = accept(fd, (struct sockaddr*)&client_addr, &addrlen);
-        if (connfd < 0){ //if error
-            continue; // keep server alive
+        if (connfd < 0){ 
+            continue; // dont crash server
         }
-        do_something(connfd); //interact with client
+        do_something(connfd); //interact with client (read and write)
         close(connfd); // close conection
     }
 
