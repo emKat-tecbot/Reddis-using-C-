@@ -14,7 +14,8 @@ static void do_something(int connfd){
     }
     std::cout << "client says: " << rbuf << "\n";
     char wbuf[] = "world"; //message sent to the client
-    write(connfd, wbuf, strlen(wbuf));
+    ssize_t w = write(connfd, wbuf, strlen(wbuf));
+    (void) w;
 }
 
 //conecting from the server side
@@ -54,3 +55,7 @@ void serverCon(){
 
 }
 
+int main(){
+    serverCon();
+    return 0;
+}

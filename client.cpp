@@ -23,7 +23,8 @@ void clientCon(){
         die("connect");
     }
     char msg[] = "hello"; // message client sends to server
-    write(fd,msg,strlen(msg));
+    ssize_t w = write(fd,msg,strlen(msg));
+    (void) w;
     char rbuf[64] = {}; //stores servers response
     ssize_t n = read(fd,rbuf,sizeof(rbuf)-1);
     if (n < 0){
@@ -31,4 +32,9 @@ void clientCon(){
     }
     std::cout << "server says: " << rbuf << "\n";
     close(fd);
+}
+
+int main(){
+    clientCon();
+    return 0;
 }
