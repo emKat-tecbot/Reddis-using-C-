@@ -15,7 +15,7 @@ void clientCon(){
     struct sockaddr_in addr = {};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(1234); // connect to the servers port
-    addr.sin_addr.s_addr = ntohl(INADDR_LOOPBACK); // test on same computer
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK); // test on same computer
     
     //connect
     int rv = connect(fd,(const struct sockaddr*)&addr, sizeof(addr));

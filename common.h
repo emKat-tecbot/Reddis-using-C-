@@ -10,12 +10,12 @@ static void die(const char* msg){
 
 // read funt
 static int32_t total_read(int fd, char*buf, size_t n){
-    while(n < 0){ // makes sure that it will read all the bites of a message and not return less bytes
+    while(n > 0){ // makes sure that it will read all the bites of a message and not return less bytes
         ssize_t r = read(fd, buf,n);
         if(r <= 0){
             return -1; //error (didnt read)
         }
-        assert((size_t)buf <= n); // crashes if somehow reads more than 4 bytes
+        assert((size_t)r <= n); // crashes if somehow reads more than 4 bytes
         n-= r; // how many bites read() didnt read
         buf +=r; // indece where to continue filling buf
     } 
@@ -29,7 +29,7 @@ static int32_t total_write(int fd, char*buf, size_t n){
         if(w < 0){
             return -1; // error (didnt write)
         }
-        assert((size_t)buf <= n); // crashes if it somehow write more than 4 bytes
+        assert((size_t)w <= n); // crashes if it somehow write more than 4 bytes
         n -= (size_t)w;
         buf += (size_t)w;
     }
@@ -44,11 +44,11 @@ static int32_t one_request(int connfd){
     // Stage 1. Reading the length of the message
     char rbuf[4 + max_msg]; // 4 = header[byte size or msg/ tells TCP where the message ends and the next one beggins (if there is a next one)]
     errno = 0; // for checking if there was an error (os changes value automatically if an error occurs)
-    int32_t read = total_read(connfd,rbuf,4); // read 4 bytes into rbuf
-    if(read){
+    int32_t r = total_read(connfd,rbuf,4); // read 4 bytes into rbuf
+    if(r){
         if(errno != 0){
             std::cout << "read() error" << "\n";
-            return read;
+            return r;
         }
     }
     uint32_t len = 0;// length of message
@@ -58,10 +58,10 @@ static int32_t one_request(int connfd){
         return -1;
     }
     // Stage 2. Reading the message
-    read = total_read(connfd,&rbuf[4],len); // &rbuf[4] = pointer to where the message starts
-    if(read){ // non zero values are true in c++
+    r = total_read(connfd,&rbuf[4],len); // &rbuf[4] = pointer to where the message starts
+    if(r){ // non zero values are true in c++
         std::cout << "read() error" << "\n";
-        return read;
+        return r;
     }
     
     std::cout << "client says: ";
@@ -113,4 +113,5 @@ static int32_t query(int fd, const char* text){
     std::cout << "server says: ";
     std::cout.write(&rbuf[4],len);
     std::cout << "\n";
+    return 0;
 }
