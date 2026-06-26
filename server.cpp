@@ -5,19 +5,6 @@
 #include <cstring> // to zero out adress for structs
 #include "common.h"
 
-static void do_something(int connfd){
-    char rbuf[64] = {}; // buffer: stores clients message
-    ssize_t n = read(connfd,rbuf,sizeof(rbuf)-1); //read message from conection and put it in rbuf
-    if(n < 0){ 
-        perror("read() error");
-        return;
-    }
-    std::cout << "client says: " << rbuf << "\n";
-    char wbuf[] = "world"; //message sent to the client
-    ssize_t w = write(connfd, wbuf, strlen(wbuf));
-    (void) w;
-}
-
 //conecting from the server side
 void serverCon(){
     // Obtain socket handle
@@ -49,7 +36,20 @@ void serverCon(){
         if (connfd < 0){ 
             continue; // dont crash server(
         }
-        do_something(connfd); //interact with client (read and write)
+        // only serve one client connection at a time
+        while(true){
+            // accept client
+            struct sockaddr_in client_addr = {};
+            int connfd = accept(fd,(struct sockaddr* )&client_addr, &addrlen);
+            if(connfd < 0){
+                continue; // accept() returns a negative number if wrong
+            }
+            // serve one client connection at once
+            while(true){
+                int32_t r = one_request(connfd);
+                if(r){break;}
+            }
+        }
         close(connfd); // close conection
     }
 

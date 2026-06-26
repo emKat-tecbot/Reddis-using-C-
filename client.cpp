@@ -22,16 +22,18 @@ void clientCon(){
     if(rv){
         die("connect");
     }
-    char msg[] = "hello"; // message client sends to server
-    ssize_t w = write(fd,msg,strlen(msg));
-    (void) w;
-    char rbuf[64] = {}; //stores servers response
-    ssize_t n = read(fd,rbuf,sizeof(rbuf)-1);
-    if (n < 0){
-        die("read");
+    // send multiple queries to test server
+    int32_t r = query(fd,"hello1");
+    if(r){
+        goto L_DONE;
     }
-    std::cout << "server says: " << rbuf << "\n";
-    close(fd);
+    r = query(fd, "hello2");
+    if(r){
+        goto L_DONE;
+    }
+    L_DONE:
+        close(fd);
+
 }
 
 int main(){
