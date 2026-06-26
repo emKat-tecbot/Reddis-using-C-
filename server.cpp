@@ -7,6 +7,45 @@
 #include <cstring>
 #include "common.h"
 
+// request_one (reads and writes)
+// do to byte specifications we use total_read and total_write instead of read and write
+
+static int32_t one_request(int connfd){
+    // Stage 1. Reading the length of the message
+    char rbuf[4 + max_msg]; // 4 = header[byte size or msg/ tells TCP where the message ends and the next one beggins (if there is a next one)]
+    errno = 0; // for checking if there was an error (os changes value automatically if an error occurs)
+    int32_t r = total_read(connfd,rbuf,4); // read 4 bytes into rbuf
+    if(r){
+        if(errno != 0){
+            std::cout << "read() error" << "\n";
+            return r;
+        }
+    }
+    uint32_t len = 0;// length of message
+    memcpy(&len,rbuf,4); //copy rbufs into len to know msg length
+    if(len > max_msg){
+        std::cout << "Message is too long" << "\n";
+        return -1;
+    }
+    // Stage 2. Reading the message
+    r = total_read(connfd,&rbuf[4],len); // &rbuf[4] = pointer to where the message starts
+    if(r){ // non zero values are true in c++
+        std::cout << "read() error" << "\n";
+        return r;
+    }
+    
+    std::cout << "client says: ";
+    std::cout.write(&rbuf[4],len);
+    std::cout << "\n";
+    // Stage 3. Reply
+    const char reply[] = "world";
+    char wbuf[4 + sizeof(reply)]; // so we have byte size of msg
+    len = (uint32_t)strlen(reply); // get length of message
+    memcpy(wbuf,&len,4); 
+    memcpy(&wbuf[4],reply,len); // copys 4 bytes on len into wbuf
+    return total_write(connfd,wbuf,len + 4);
+}
+
 void serverCon(){
     // Obtain socket handle
     int fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -47,4 +86,9 @@ void serverCon(){
 
         close(connfd); // close conection
     }
+}
+
+int main(){
+    serverCon();
+    return 0;
 }
