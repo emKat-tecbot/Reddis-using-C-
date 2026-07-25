@@ -2,6 +2,8 @@
 #include <netinet/in.h> //sock adresess
 #include <unistd.h> // read and write and closes
 #include <iostream>
+#include <string>
+#include <vector>
 #include <cstring> // to zero out adress for structs
 #include "common.h"
 
@@ -34,9 +36,8 @@ static int32_t total_write(int fd, char*buf, size_t n){
     return 0;
 }
 
-
-// query (reads and writes)
-static int32_t query(int fd, const char* text){
+// send request 
+static int32_t send_req(int fd, const char *text){
     // Stage 1. test length of query
     uint32_t len = (uint32_t)strlen(text);
     if(len > max_msg){
@@ -46,9 +47,11 @@ static int32_t query(int fd, const char* text){
     char wbuf[4 + max_msg];
     memcpy(wbuf, &len, 4);
     memcpy(&wbuf[4], text, len);
-    if(int32_t r = total_write(fd,wbuf,4+len)){
-        return r;
-    }
+    return total_write(fd,wbuf, 4 + len);
+}
+
+// reads response
+static int32_t read_res(int fd){
     // Stage 3. read reply
     char rbuf[4 + max_msg];
     errno = 0;
@@ -59,6 +62,7 @@ static int32_t query(int fd, const char* text){
             return r;
         }
     }
+    uint32_t len = 0;
     memcpy(&len,rbuf,4);
     if(len > max_msg){
         std::cout << "Message is too long" << "\n";
@@ -93,14 +97,18 @@ void clientCon(){
     if(rv){
         die("connect");
     }
-    // send multiple queries to test server
-    int32_t r = query(fd,"hello1");
-    if(r){
-        goto L_DONE;
+    // Pipeline test 1. Send all requests first
+    std::vector<std::string> query_list = {"hello1", "hello2", "hello3", std::string(max_msg, 'z'), "hello5"};
+    for(const std::string& s: query_list){
+        int32_t err = send_req(fd, s.data());
+        if(err){
+            goto L_DONE;
+        }
     }
-    r = query(fd, "hello2");
-    if(r){
-        goto L_DONE;
+        // read all responses
+    for(size_t i = 0; i < query_list.size(); i++){
+        int32_t err = read_res(fd);
+        if(err){goto L_DONE;}
     }
     L_DONE:
         close(fd);

@@ -18,6 +18,27 @@ static void msg_errno(const char* msg){
     fprintf(stderr, " [errno: %d] %s\n", errno, msg);
 }
 
+struct Buffer{
+    uint8_t *buffer_begin = nullptr;
+    uint8_t *buffer_end = nullptr;
+    uint8_t *data_begin = nullptr;
+    uint8_t *data_end = nullptr;
+};
+
+// allocate a buffer of a give size
+static void buf_init(Buffer &buf, size_t size){
+    buf.buffer_begin = new uint8_t[size];
+    buf.buffer_end = buf.buffer_begin + size;
+    buf.data_begin = buf.buffer_begin;
+    buf.data_end = buf.buffer_begin;
+}
+
+// free buffer memory
+static void buf_free(Buffer &buf){
+    delete[] buf.buffer_begin;
+    buf.buffer_begin = buf.buffer_end = buf.data_begin = buf.data_end = nullptr;
+}
+
 // struct that stores the state the client is in during each event loop iteration
 struct Conn{
     int fd = -1;
@@ -25,8 +46,18 @@ struct Conn{
     bool want_read = false;
     bool want_write = false;
     bool want_close = false;//tells event loop to destroy conection
-    std::vector<uint8_t> incoming;// stores incoming data from client
-    std::vector<uint8_t> output;// stores outgoing data to client
+    Buffer incoming;// stores incoming data from client
+    Buffer output;// stores outgoing data to client
+
+    Conn() {
+        buf_init(incoming, 64*1024); // allocate 64kb for incoming
+        buf_init(output, 64*1024); //allocate 64kb for output
+    }
+
+    ~Conn(){
+        buf_free(incoming);
+        buf_free(output);
+    }
 };
 
 int poll(struct pollfd* fds, nfds_t nfds, int timeout);// makes OS tell us when a fd is ready to read or write
@@ -73,36 +104,44 @@ static Conn *handle_accept(int fd){
 }
 
 // append data to a buffer
-static void buf_append(std::vector<uint8_t> &buf, const uint8_t *data, size_t len){
-    buf.insert(buf.end(),data,data + len);
+static void buf_append(Buffer &buf, const uint8_t *data, size_t len){
+    assert(buf.data_end + len <= buf.buffer_end); // ensure space to append
+    mempcpy(buf.data_end, data, len);
+    buf.data_end += len;
 }
 
 // remove data from the front of a buffer
-static void buf_consume(std::vector<uint8_t> &buf, size_t n){
-    buf.erase(buf.begin(), buf.begin() + n);
+static void buf_consume(struct Buffer &buf, size_t n){
+    assert(buf.data_begin + n <= buf.data_end);
+    buf.data_begin += n;
+    if(buf.data_begin == buf.data_end){
+        // reset if empty
+        buf.data_begin = buf.buffer_begin;
+        buf.data_end = buf.data_begin;
+    }
 }
 
 static bool try_one_request(Conn *conn){
     // Try to parse buffer
     // header
-    if(conn->incoming.size() < 4){ // not enough data to parse a message (4 bytes = 32 bit integer)
+    if(conn->incoming.data_end - conn->incoming.data_begin < 4){ // not enough data to parse a message (4 bytes = 32 bit integer)
         return false;
     }
     uint32_t len = 0;
-    memcpy(&len,conn->incoming.data(),4); // copy the first 4 bytes of incoming buffer to len
+    memcpy(&len,conn->incoming.data_begin,4); // copy the first 4 bytes of incoming buffer to len
     if(len > max_msg){ // protocol errror
         msg("message too long");
         conn->want_close = true;
         return false;
     }
     // body
-    if(4 + len > conn->incoming.size()){
+    if(4 + len > (size_t)(conn->incoming.data_end - conn->incoming.data_begin)){
         return false; // not enough data to parse a message
     }
 
     // Process the parsed message
     // Generate response
-    const uint8_t *request = &conn->incoming[4]; // pointer to the start of the message body
+    const uint8_t *request = conn->incoming.data_begin + 4; // pointer to the start of the message body
     //do something with the request
     printf("client says: len: %d data: %.*s\n", len, len < 100? len:100, request);
     //generate response
@@ -116,8 +155,8 @@ static bool try_one_request(Conn *conn){
 
 // send data to client
 static void handle_write(Conn *conn){
-    assert(conn->output.size() > 0); // make sure there is data to send
-    ssize_t rv = write(conn->fd, &conn->output[0], conn->output.size());
+    assert(conn->output.data_end - conn->output.data_begin > 0); // make sure there is data to send
+    ssize_t rv = write(conn->fd, conn->output.data_begin, conn->output.data_end- conn->output.data_begin);
     if(rv < 0 && errno == EAGAIN){ // error handling
         return; // NOT READY
     }
@@ -131,7 +170,7 @@ static void handle_write(Conn *conn){
     buf_consume(conn->output, (size_t)rv);
 
     // update the write readiness flag
-    if(conn->output.size() == 0){ // all data writen
+    if(conn->output.data_end - conn->output.data_begin == 0){ // all data writen
         conn->want_read = true;
         conn->want_write = false;
     } // else: want write
@@ -151,7 +190,7 @@ static void handle_read(Conn *conn){
     }
     // handle EOF
     if(rv == 0){
-        if(conn->incoming.size() == 0){
+        if(conn->incoming.data_end - conn->incoming.data_begin == 0){
             msg("client closed connection");
         }else{
             msg("unexpected EOF");
@@ -167,7 +206,7 @@ static void handle_read(Conn *conn){
     while(try_one_request(conn)){}; // we make it a loop so we can handle multiple requests in one read
 
     // Update readiness flag
-    if(conn->output.size() > 0){ // has a response
+    if(conn->output.data_end - conn->output.data_begin > 0){ // has a response
         conn->want_read = false;
         conn->want_write = true;
         return handle_write(conn); // try to send the response immediately
