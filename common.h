@@ -11,3 +11,4 @@ static void die(const char* msg){
 }
 
 const size_t max_msg = 32 << 20; //maximum length of a message
+const size_t max_arg = 200; // maximum number of arguments a command can have

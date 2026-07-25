@@ -4,11 +4,57 @@
 #include <iostream>
 #include <cstring> // to zero out adress for structs
 #include <cerrno>
-#include <cstring>
 #include <vector>
 #include <poll.h> // for poll() function
 #include <fcntl.h> // for fcntl() function
 #include "common.h"
+
+//reads 4 bytes from a buffer (reads the string parts of the message protocol [commands, values, keys])
+static bool read_str(const uint8_t *&cur, const uint8_t *end, size_t n, std::string &out){
+    if(cur + n > end){
+        return false;
+    }
+    out.assign(cur, cur + n);
+    cur += n;
+    return true;
+}
+
+// read 4 bytes from a buffer (reads the int parts of the message protocol [length and number of strings])
+static bool read_u32(const uint8_t *&cur, const uint8_t *end, uint32_t &out){
+    if(cur + 4 > end){
+        return false;
+    }
+    memcpy(&out, cur, 4);
+    cur += 4;
+    return true;
+}
+
+
+// parses the request command (client sends raw bytes, turn those into strings the computer can read)
+static int32_t parse_req(const uint8_t *data, size_t size, std::vector<std::string> &out){
+    const uint8_t *end = data + size;
+    uint32_t nstr = 0;
+    if(!read_u32(data,end,nstr)){
+        return -1;
+    }
+    if(nstr > max_arg){
+        return -1;  // safety limit
+    }
+    while(out.size() < nstr){
+        uint32_t len = 0;
+        if(!read_u32(data, end, len)){
+            return -1;
+        }
+        out.push_back(std::string());
+        if(!read_str(data, end, len, out.back())){
+            return -1;
+        }
+    }
+    if(data != end){
+        return -1; // trailing garbage
+    }
+    return 0;
+}
 
 static void msg(const char* msg){
     fprintf(stderr, "%s\n", msg);
